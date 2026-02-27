@@ -1,0 +1,6 @@
+Flask
+yt-dlp
+youtube-transcript-api
+requests
+flasgger
+gunicorn
