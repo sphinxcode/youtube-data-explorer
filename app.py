@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+import os
+from flask import Flask, request, jsonify, redirect
 from flasgger import Swagger
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -7,12 +8,18 @@ import requests
 app = Flask(__name__)
 swagger = Swagger(app)
 
-def get_video_metadata(url, browser='chrome'):
+
+@app.route('/')
+def index():
+    """Redirect to API documentation."""
+    return redirect('/apidocs')
+
+
+def get_video_metadata(url):
     ydl_opts = {
         'quiet': True,
         'skip_download': True,
         'no_warnings': True,
-        'cookiesfrombrowser': (browser,),  # Use specified browser's cookies
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -195,11 +202,6 @@ def video_data():
         type: string
         required: false
         description: ISO 639-1 language code for subtitles (e.g., 'en', 'es', 'fr'). Default is 'en'. Will attempt to translate if direct subtitles not available.
-      - name: browser
-        in: query
-        type: string
-        required: false
-        description: Browser to extract cookies from (chrome, firefox, opera, edge, safari). Default is 'chrome'.
     responses:
       200:
         description: A JSON object containing the requested video data.
@@ -255,16 +257,10 @@ def video_data():
 
     # Get parameters
     lang = request.args.get('lang', 'en').lower()
-    browser = request.args.get('browser', 'chrome')
 
     # Validate language code (basic validation)
     if not lang.isalpha() or len(lang) != 2:
         return jsonify({'error': 'Invalid language code. Please use ISO 639-1 format (e.g., "en", "es", "fr")'}), 400
-
-    # Validate browser parameter
-    valid_browsers = {'chrome', 'firefox', 'opera', 'edge', 'safari'}
-    if browser.lower() not in valid_browsers:
-        return jsonify({'error': f'Invalid browser. Must be one of: {", ".join(valid_browsers)}'}), 400
 
     # Parse the fields parameter; default returns all fields.
     fields_param = request.args.get('fields')
@@ -274,7 +270,7 @@ def video_data():
         fields = {"title", "metadata", "transcript"}
 
     try:
-        metadata = get_video_metadata(video_url, browser.lower()) if fields.intersection({"title", "metadata", "transcript"}) else None
+        metadata = get_video_metadata(video_url) if fields.intersection({"title", "metadata", "transcript"}) else None
         result = {}
 
         if "title" in fields:
@@ -309,18 +305,5 @@ def video_data():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    try:
-        # Try port 8000 first, fallback to other ports if needed
-        ports = [8000, 8080, 5000]
-        for port in ports:
-            try:
-                app.run(host='0.0.0.0', port=port, debug=True)
-                break
-            except OSError as e:
-                if port == ports[-1]:  # If this is the last port to try
-                    print(f"Could not bind to any of the ports: {ports}")
-                    raise e
-                print(f"Port {port} is in use, trying next port...")
-                continue
-    except Exception as e:
-        print(f"Error starting the server: {e}")
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port, debug=True)
