@@ -37,34 +37,37 @@ def get_video_metadata(url):
         }
 
 def get_transcript(video_id, lang='en'):
+    ytt_api = YouTubeTranscriptApi()
     try:
-        # First try to get transcript in the exact language
+        # First try to fetch transcript in the exact language
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
-            # Ensure we have the correct structure with timing information
+            transcript = ytt_api.fetch(video_id, languages=[lang])
             segments = [{
-                'text': entry['text'],
-                'start': entry['start'],
-                'duration': entry['duration']
-            } for entry in transcript]
+                'text': snippet.text,
+                'start': snippet.start,
+                'duration': snippet.duration
+            } for snippet in transcript]
             return {
                 'segments': segments,
-                'text': ' '.join([entry['text'] for entry in transcript])
+                'text': ' '.join([snippet.text for snippet in transcript])
             }
         except Exception as e:
             print(f"Direct transcript failed: {str(e)}")
-            # If exact language not found, try to get transcript with translation
+            # If exact language not found, try to find and translate
             try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                translated = transcript_list.translate(lang).fetch()
+                transcript_list = ytt_api.list(video_id)
+                found = transcript_list.find_transcript([lang, 'en'])
+                if found.language_code != lang:
+                    found = found.translate(lang)
+                fetched = found.fetch()
                 segments = [{
-                    'text': entry['text'],
-                    'start': entry['start'],
-                    'duration': entry['duration']
-                } for entry in translated]
+                    'text': snippet.text,
+                    'start': snippet.start,
+                    'duration': snippet.duration
+                } for snippet in fetched]
                 return {
                     'segments': segments,
-                    'text': ' '.join([entry['text'] for entry in translated])
+                    'text': ' '.join([snippet.text for snippet in fetched])
                 }
             except Exception as e:
                 print(f"Translation failed: {str(e)}")
